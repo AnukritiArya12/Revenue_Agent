@@ -3,10 +3,13 @@
 import re
 from collections import Counter
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Annotated
 
 import pymupdf
-from langchain_core.tools import tool
+from langchain_core.tools import tool, InjectedToolCallId
+from langchain_core.messages import ToolMessage
+from langgraph.types import Command
+from langgraph.graph import END
 
 from tools.pdf_loader import (
     get_document_outline,
@@ -264,6 +267,7 @@ def submit_revenue_details(
     source_pages: Any = None,
     matched_line: Optional[str] = None,
     supporting_evidence: Optional[str] = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = "",
 ) -> str:
     """Submit the revenue. The tool checks the amount and row label against the cited
     PDF page and writes the evidence row itself (do not pass evidence).
@@ -325,6 +329,15 @@ def submit_revenue_details(
             matched_line=str(matched_line).split("|")[0].strip() or str(matched_line).strip(),
             supporting_evidence=row,
         )
-        return details.model_dump_json()
+        # End the graph through its normal tool routing after verified submission.
+        # Errors above return ordinary strings and permit the agent to retry.
+        return Command(
+            update={"messages": [ToolMessage(
+                content=details.model_dump_json(),
+                tool_call_id=tool_call_id,
+                name="submit_revenue_details",
+            )]},
+            goto=END,
+        )
     except Exception as exc:
         return f"ERROR: Invalid revenue submission: {exc}"
