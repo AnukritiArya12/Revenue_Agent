@@ -157,7 +157,7 @@ class DeepRevenueAgent:
         return "; ".join(lines[:8])
 
     def _run(self, messages, deadline):
-        """Run the agent, printing each step. Never raises on agent errors."""
+        """Run the agent to graph completion and collect the final state."""
         final = None
         seen = 0
         try:
@@ -177,14 +177,12 @@ class DeepRevenueAgent:
                         print(f"  <- {msg.name}: {self._text(msg.content)[:110]!r}", flush=True)
                 seen = max(seen, len(msgs))
 
-                if self._submission(msgs):
-                    print("[*] Verified revenue submitted. Stopping agent.", flush=True)
-                    break
+                # Successful submit tool routes to END itself; do not break stream.
                 if time.time() > deadline:
-                    print("[!] Time budget reached. Stopping agent.", flush=True)
-                    break
-        except Exception as exc:  # step limit, timeout, malformed tool call ...
+                    raise TimeoutError("Revenue agent exceeded the document time budget")
+        except Exception as exc:
             print(f"[!] Agent step failed ({type(exc).__name__}): {str(exc)[:200]}", flush=True)
+            raise
         return final or {"messages": []}
 
     # ---------- main ----------
