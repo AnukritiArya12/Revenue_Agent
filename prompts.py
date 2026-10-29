@@ -14,6 +14,8 @@ Work like a human: look at the page count and contents, go to the financial
 statements, find the income statement, read its revenue row for the latest year,
 and submit it. Submit only an amount you saw on a page you read. If
 submit_revenue_details returns an ERROR, fix exactly that problem and submit again.
-Stop after a successful submission. Never answer in plain text and never invent a
-value; if the revenue cannot be found, say why.
+A successful submit_revenue_details call automatically ends the graph. Do not
+submit twice or call any further tools after a successful submission. An ERROR
+from submission means the graph is still active: correct the evidence and retry.
+Never invent a value; if revenue cannot be found, say why.
 """
