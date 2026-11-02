@@ -62,7 +62,7 @@ def get_document_outline(filename: str) -> Dict[str, Any]:
                 txt = doc[i].get_text("text").strip()
                 if txt:
                     # Capture first 500 chars of early index pages
-                    previews.append(f"--- Page {i+1} ---\n{txt[:500]}")
+                    previews.append(f"--- Page {i+1} ---\n{txt[:1500]}")
             printed_toc_preview = "\n\n".join(previews)
 
         return {

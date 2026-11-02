@@ -20,6 +20,14 @@ from agent.schemas import RevenueDetails
 _NUM = re.compile(r"\d[\d,]*(?:\.\d+)?")
 _CURRENT = {"path": None}
 
+FS_TITLES = (
+    "statement of profit", "statement of income", "income statement",
+    "statement of operations", "statements of operations",
+    "statement of comprehensive income", "statements of income",
+)
+
+
+# ---------------------------------------------------------------- helpers
 
 # ---------------------------------------------------------------- helpers
 
@@ -160,7 +168,8 @@ def _scan(path: Path, first: int, last: int) -> str:
         own = [l for l in lines if counts[re.sub(r"\d+", "", l)] < limit]
         ratio = sum(c.isdigit() for c in text) / max(1, len(text))
         tag = "T" if ratio >= 0.10 else "text"
-        out.append(f"Page {p} [{tag}]: {' | '.join(own[:4])[:120]}")
+        flag = " [INCOME-STMT?]" if tag == "T" and any(t in text[:600].casefold() for t in FS_TITLES) else ""
+        out.append(f"Page {p} [{tag}]{flag}: {' | '.join(own[:4])[:120]}")
     return "\n".join(out)
 
 
