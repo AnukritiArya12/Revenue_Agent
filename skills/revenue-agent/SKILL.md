@@ -71,7 +71,8 @@ No `ls`, `write_file`, `edit_file`, `execute`, shell, or planning tools. No dupl
    Use standalone revenue only when consolidated statements
    are unavailable in the supplied report.
    Never label standalone figures as consolidated.
-   Budget: at most 3 scans and 4 page reads. Never repeat a call. Never wander into notes.
+   
+   Budget: With bookmarks: at most 3 scans, 4 reads. Without bookmarks/contents: at most 8 scans, 5 reads. Scan 40%→100% of the document first, then 0%→40%.never wanders into notes.
 
 ## Choose the revenue row
 - Pick the company-wide revenue total as printed: "Revenue from operations",
