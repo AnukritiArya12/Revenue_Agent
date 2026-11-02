@@ -168,7 +168,10 @@ def _scan(path: Path, first: int, last: int) -> str:
         own = [l for l in lines if counts[re.sub(r"\d+", "", l)] < limit]
         ratio = sum(c.isdigit() for c in text) / max(1, len(text))
         tag = "T" if ratio >= 0.10 else "text"
-        flag = " [INCOME-STMT?]" if tag == "T" and any(t in text[:600].casefold() for t in FS_TITLES) else ""
+        head = text[:600].casefold()
+        flag = ""
+        if tag == "T" and any(t in head for t in FS_TITLES):
+            flag = " [INCOME-STMT? consolidated]" if "consolidated" in head else " [INCOME-STMT? standalone]"
         out.append(f"Page {p} [{tag}]{flag}: {' | '.join(own[:4])[:120]}")
     return "\n".join(out)
 
