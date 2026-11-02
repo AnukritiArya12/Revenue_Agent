@@ -24,19 +24,20 @@ _CURRENT = {"path": None}
 # ---------------------------------------------------------------- helpers
 
 def set_current_document(path) -> None:
-    """Called by the agent: tools keep working if the model mistypes the path."""
-    _CURRENT["path"] = str(path)
+    """Application selects the report before sequential extraction."""
+    _CURRENT["path"] = str(_resolve_document_path(str(path)))
 
 
 def _resolve(name: Optional[str] = None) -> Path:
+    """Allow custom tools to access only the selected report."""
+    if not _CURRENT["path"]:
+        raise PermissionError("No report selected for this extraction")
+    current = _resolve_document_path(_CURRENT["path"])
     if name:
-        try:
-            return _resolve_document_path(name)
-        except Exception:
-            pass
-    if _CURRENT["path"]:
-        return Path(_CURRENT["path"])
-    raise FileNotFoundError(f"Document not found: {name}")
+        requested = _resolve_document_path(name)
+        if requested != current:
+            raise PermissionError("Access denied: only the selected report is allowed")
+    return current
 
 
 def _norm(text) -> str:

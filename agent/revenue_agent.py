@@ -5,7 +5,7 @@ from pathlib import Path
 import inspect
 from typing import Optional
 
-from deepagents import create_deep_agent
+from deepagents import FilesystemPermission, create_deep_agent
 from deepagents.backends import StateBackend
 from deepagents.backends.utils import create_file_data
 from deepagents.middleware.filesystem import FilesystemMiddleware
@@ -24,8 +24,25 @@ from agent.tools import (
 )
 from tools.pdf_loader import get_document_outline
 
-FILE_BUDGET_SECONDS = 20 * 60  # hard time budget per document
+
+FILE_BUDGET_SECONDS = 30 * 60  # hard time budget per document
 MAX_ATTEMPTS = 3
+
+FILESYSTEM_PERMISSIONS = [
+    # Read virtual navigation files.
+    FilesystemPermission(
+        operations=["read"],
+        paths=["/navigation/**"],
+        mode="allow",
+    ),
+
+    # Block all other reads and all file modifications.
+    FilesystemPermission(
+        operations=["read", "write"],
+        paths=["/**"],
+        mode="deny",
+    ),
+]
 
 
 class DeepRevenueAgent:
@@ -45,8 +62,7 @@ class DeepRevenueAgent:
         skill = skill_path.read_text(encoding="utf-8-sig").replace("\r\n", "\n")
         if not skill.startswith("---\n"):
             raise ValueError("SKILL.md requires YAML frontmatter.")
-        # The skill body is given to the agent at the start of every attempt, so
-        # it is always followed (the agent is not allowed to browse files).
+        # Include the skill instructions at the start of every attempt.
         self.skill_body = skill.split("\n---\n", 1)[-1].strip()
 
         llm = ChatOllama(
@@ -79,9 +95,10 @@ class DeepRevenueAgent:
             ],
             system_prompt=DEEP_AGENT_SYSTEM_PROMPT,
             backend=StateBackend(),
-            middleware=[FilesystemMiddleware(
-                tools=["read_file", "glob", "grep"],
-            )],
+            middleware=[
+                FilesystemMiddleware(tools=["read_file", "glob", "grep"])
+            ],
+            permissions=FILESYSTEM_PERMISSIONS,
         )
 
     # ---------- helpers ----------
@@ -186,12 +203,19 @@ class DeepRevenueAgent:
                         for c in calls:
                             print(f"  -> {c.get('name')} {str(c.get('args'))[:150]}", flush=True)
                     elif isinstance(msg, ToolMessage):
-                        print(f"  <- {msg.name}: {self._text(msg.content)[:110]!r}", flush=True)
+                        print(f"  <- {msg.name}: {self._text(msg.content)[:110]!r}",
+                              flush=True,
+                        )
                 seen = max(seen, len(msgs))
 
                 # Let the graph complete normally after the model receives the tool result.
                 if time.time() > deadline:
-                    raise TimeoutError("Revenue agent exceeded the document time budget")
+                    verified = self._submission(msgs)
+
+                    if verified is None:
+                        raise TimeoutError(
+                            "Revenue agent exceeded the document time budget"
+                        )
         except Exception as exc:
             print(f"[!] Agent step failed ({type(exc).__name__}): {str(exc)[:200]}", flush=True)
             raise
@@ -200,9 +224,7 @@ class DeepRevenueAgent:
     # ---------- main ----------
 
     def extract_revenue(self, document_name) -> RevenueDetails:
-        # Discover the requested filename using DeepAgents' built-in glob.
-        # StateBackend cannot see Windows disk files; expose *names only* as
-        # virtual entries, never PDF contents, credentials, or source code.
+        # This CLI requires an exact report filename or an allowed absolute path.
         if not str(document_name).strip():
             raise ValueError("Document filename is required")
         requested = Path(str(document_name)).name
@@ -219,37 +241,12 @@ class DeepRevenueAgent:
                 raise FileNotFoundError("Document is not an allowed uploaded report")
             path = candidate  # Already resolved: no glob call.
         else:
-            # File listing here is only a safe virtual namespace projection;
-            # no Python filename matching or discovery fallback is performed.
-            manifest = {
-                f"/navigation/reports/{p.name}": create_file_data(p.name)
-                for p in report_root.iterdir()
-                if p.is_file() and p.suffix.lower() in {".pdf", ".docx"}
-            }
-            if not manifest:
-                raise FileNotFoundError("No uploaded reports in data/reports")
-            discovery = self._run(
-                [{"role": "user", "content": (
-                    f"Call built-in glob with pattern '/navigation/reports/{requested}'. "
-                    "Return matching paths. Do not call any other tool."
-                )}],
-                time.time() + 120,
-                manifest,
-            )
-            # Trust only actual glob tool output, never the LLM's claimed path.
-            glob_results = [
-                self._text(m.content)
-                for m in discovery.get("messages", [])
-                if isinstance(m, ToolMessage) and m.name == "glob"
-            ]
-            expected = f"/navigation/reports/{requested}"
-            if not any(expected in result.splitlines() or expected in result for result in glob_results):
-                raise FileNotFoundError(f"glob did not discover requested report: {requested}")
-            if expected not in manifest:
-                raise FileNotFoundError(f"Requested report not found: {requested}")
+            # Exact filename: validate directly without an extra model call.
             path = (report_root / requested).resolve()
-            if path.parent != report_root or not path.is_file():
-                raise FileNotFoundError("Resolved path is outside allowed reports directory")
+            if path.parent != report_root:
+                raise PermissionError("Access denied: report must be inside data/reports")
+            if not path.is_file():
+                raise FileNotFoundError(f"Report not found: {requested}")
         is_pdf = path.suffix.lower() == ".pdf"
         set_current_document(path)
         started = time.time()
