@@ -171,7 +171,12 @@ def _scan(path: Path, first: int, last: int) -> str:
         head = text[:600].casefold()
         flag = ""
         if tag == "T" and any(t in head for t in FS_TITLES):
-            flag = " [INCOME-STMT? consolidated]" if "consolidated" in head else " [INCOME-STMT? standalone]"
+            if "consolidated" in head:
+                flag = " [INCOME-STMT? consolidated]"
+            elif "standalone" in head:
+                flag = " [INCOME-STMT? standalone]"
+            else:
+                flag = " [INCOME-STMT? scope unclear]"
         out.append(f"Page {p} [{tag}]{flag}: {' | '.join(own[:4])[:120]}")
     return "\n".join(out)
 

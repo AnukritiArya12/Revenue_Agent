@@ -44,7 +44,7 @@ No `ls`, `write_file`, `edit_file`, `execute`, shell, or planning tools. No dupl
    operations, statement of comprehensive income), then cash flow, changes in
    equity, and notes (all `[T]`). The income statement is usually the second table
    statement. If the scan shows only text pages, scan the next 25 pages.
-4. 4. **No bookmarks or usable TOC.**
+4. **No bookmarks or usable TOC.**
    First check whether printed contents are available through
    the document outline.
    If printed contents are available, use them as page hints.
