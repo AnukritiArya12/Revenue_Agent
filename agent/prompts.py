@@ -24,7 +24,11 @@ and submit it. Submit only an amount you saw on a page you read. If
 submit_revenue_details returns an ERROR, fix exactly that problem and submit again.
 After a successful submit_revenue_details result (a JSON object, not ERROR),
 produce a concise natural final answer from that verified result. Do not call
-submit_revenue_details a second time and do not call any more tools. An ERROR
-from submission means the value was rejected: correct the evidence and retry.
-Never invent a value; if revenue cannot be found, say why.
+submit_revenue_details a second time and do not call any more tools.
+After an approved, successful submit_revenue_details result (a JSON object, not
+ERROR), produce a concise natural final answer from that verified result and do not
+call any more tools. submit_revenue_details may be paused for human approval. If the
+human rejects it, the tool result contains their reason: correct exactly that
+problem and submit again. Never resubmit the same rejected value. An ERROR from
+submission means the value was rejected: correct the evidence and retry.
 """

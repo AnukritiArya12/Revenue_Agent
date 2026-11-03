@@ -44,6 +44,12 @@ No `ls`, `write_file`, `edit_file`, `execute`, shell, or planning tools. No dupl
    operations, statement of comprehensive income), then cash flow, changes in
    equity, and notes (all `[T]`). The income statement is usually the second table
    statement. If the scan shows only text pages, scan the next 25 pages.
+
+   Pages marked `[INCOME-STMT? consolidated]` are the target: read those first. Read a
+  `standalone` page only if no consolidated income statement exists. If only
+   standalone pages are flagged, scan the next 25 pages before submitting.
+  `unit_scale` must be copied from the statement heading (for example "crore",
+   "million"), nothing else.
 4. **No bookmarks or usable TOC.**
    First check whether printed contents are available through
    the document outline.
@@ -72,7 +78,9 @@ No `ls`, `write_file`, `edit_file`, `execute`, shell, or planning tools. No dupl
    are unavailable in the supplied report.
    Never label standalone figures as consolidated.
    
-   Budget: With bookmarks: at most 3 scans, 4 reads. Without bookmarks/contents: at most 8 scans, 5 reads. Scan 40%→100% of the document first, then 0%→40%.never wanders into notes.
+  Budget: with bookmarks at most 3 scans and 4 reads. Without bookmarks or contents
+  at most 8 scans and 5 reads: scan 40%-100% of the document first, then 0%-40%.
+  Never wander into notes.
 
 ## Choose the revenue row
 - Pick the company-wide revenue total as printed: "Revenue from operations",
@@ -85,6 +93,10 @@ No `ls`, `write_file`, `edit_file`, `execute`, shell, or planning tools. No dupl
 - Use "Total income" only when the statement has no revenue or sales row (banks,
   insurers). Never use other income, finance income, gross profit, operating profit,
   EBITDA, net profit, cash flow, assets or segment-only revenue.
+
+For banks, insurers and central banks, use the "Total income" row from the Income
+section (never an Expenditure total). Set `scope` to `unknown` if there is no
+consolidated/standalone split, and also fill `total_income`.
 
 ## Choose the number
 - Use the latest fiscal-year column, never the comparative (previous year) column.
@@ -103,8 +115,13 @@ Call `submit_revenue_details` once with: `revenue_from_operations` (exact amount
 `[336]`; `[]` for DOCX), `fiscal_year`, `scope` (`consolidated`, `standalone` or
 `unknown`), `currency`, `unit_scale`, `company_name`. Do not pass evidence; the tool
 writes it from the page. If the result starts with ERROR, fix that exact problem and
-submit again; do not repeat a rejected value. After a successful submission, give a natural final answer using the verified
-result. Do not submit again or call further tools.
+submit again; do not repeat a rejected value. 
+After a successful, approved submission, give a natural final answer using the
+verified result. Do not submit again or call further tools.
+A human may review the submission before it runs. If the human rejected it, read
+the reason, fix exactly that problem (for example read the consolidated statement,
+or use the Income section row) and submit again with a different value, page or
+scope. Never submit the same rejected value again.
 If the revenue cannot be established, say so and why. Never invent a value.
 
 Extract other_income and total_income from the same

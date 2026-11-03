@@ -56,6 +56,7 @@ class DeepRevenueAgent:
         model_name=MODEL_NAME,
         base_url=OLLAMA_BASE_URL,
         temperature=MODEL_TEMPERATURE,
+        hitl=False,
     ):
         root = Path(__file__).resolve().parent.parent
         skill_path = root / "skills" / "revenue-agent" / "SKILL.md"
@@ -103,9 +104,7 @@ class DeepRevenueAgent:
                 FilesystemMiddleware(tools=["read_file", "glob", "grep"])
             ],
             permissions=FILESYSTEM_PERMISSIONS,
-            interrupt_on={
-                "submit_revenue_details": True
-            },
+            **({"interrupt_on": {"submit_revenue_details": True}} if hitl else {}),
             checkpointer=InMemorySaver(),
         )
 
@@ -202,109 +201,70 @@ class DeepRevenueAgent:
     # ---------- agent run with HITL ----------
 
     def _run(self, messages, deadline, files=None):
-        """Run the agent to graph completion and collect the final state."""
-
-        seen = 0
-
         config = {
             "recursion_limit": 40,
-            "configurable": {
-                "thread_id": str(uuid.uuid4())
-            }
+            "configurable": {"thread_id": str(uuid.uuid4())},
         }
+        inp = {"messages": messages, "files": files or {}}
+        final, seen = None, 0
 
         try:
-            result = self.agent.invoke(
-                {
-                    "messages": messages,
-                    "files": files or {}
-                },
-                config=config,
-            )
-
             while True:
-                msgs = result.get("messages", [])
+                for chunk in self.agent.stream(inp, config=config, stream_mode="values"):
+                    msgs = chunk.get("messages")
+                    if msgs is None:
+                        continue
+                    final = chunk
+                    for msg in msgs[seen:]:
+                        calls = getattr(msg, "tool_calls", None)
+                        if calls:
+                            for c in calls:
+                                print(f"  -> {c.get('name')} {str(c.get('args'))[:150]}", flush=True)
+                        elif isinstance(msg, ToolMessage):
+                            print(f"  <- {msg.name}: {self._text(msg.content)[:110]!r}", flush=True)
+                    seen = max(seen, len(msgs))
+                    if time.time() > deadline and self._submission(msgs) is None:
+                        raise TimeoutError("Revenue agent exceeded the document time budget")
 
-                for msg in msgs[seen:]:
-                    calls = getattr(msg, "tool_calls", None)
-
-                    if calls:
-                        for c in calls:
-                            print(
-                                f"  -> {c.get('name')} "
-                                f"{str(c.get('args'))[:150]}",
-                                flush=True
-                            )
-
-                    elif isinstance(msg, ToolMessage):
-                        print(
-                            f"  <- {msg.name}: "
-                            f"{self._text(msg.content)[:110]!r}",
-                            flush=True,
-                        )
-
-                seen = len(msgs)
-
-                # Check whether the graph is waiting for human approval.
-                interrupts = result.get("__interrupt__", [])
-
-                if not interrupts:
+                state = self.agent.get_state(config)
+                pending = [i for t in state.tasks for i in t.interrupts]
+                if not pending:
                     break
 
-                for item in interrupts:
-                    print("\n[HITL] Approval required:")
-                    print(item.value)
+                value = pending[0].value
+                requests = value.get("action_requests", []) if isinstance(value, dict) else []
+                print("\n" + "-" * 50 + "\n[HITL] Approval required before submit")
+                for r in requests:
+                    a = r.get("args", {})
+                    print(f"Row label : {a.get('matched_line')}")
+                    print(f"Amount    : {a.get('revenue_from_operations')} ({a.get('currency')}, {a.get('unit_scale')})")
+                    print(f"Scope     : {a.get('scope')} | Year: {a.get('fiscal_year')} | Page: {a.get('source_pages')}")
+                if not requests:
+                    print(value)
 
-                decision = input(
-                    "\nApprove submit_revenue_details? (yes/no): "
-                ).strip().lower()
+                t0 = time.time()
+                while True:
+                    ans = input("Approve? (y/n): ").strip().lower()
+                    if ans in ("y", "yes", "n", "no"):
+                        break
+                    print("Please enter y or n.")
 
-                if decision in ("yes", "y"):
-                    resume_value = {
-                        "decisions": [
-                            {"type": "approve"}
-                        ]
-                    }
-
-                elif decision in ("no", "n"):
-                    resume_value = {
-                        "decisions": [
-                            {
-                                "type": "reject",
-                                "message": "Human rejected this submission."
-                            }
-                        ]
-                    }
-
+                count = max(1, len(requests))
+                if ans in ("y", "yes"):
+                    decisions = [{"type": "approve"}] * count
                 else:
-                    print("Please enter yes or no.")
-                    continue
+                    why = input("Kya galat hai? ").strip()
+                    decisions = [{"type": "reject",
+                                  "message": f"Human rejected: {why}. Do not submit the same value again."}] * count
 
-                # Resume the same graph execution using the same thread_id.
-                result = self.agent.invoke(
-                    Command(resume=resume_value),
-                    config=config,
-                )
-
-                if time.time() > deadline:
-                    verified = self._submission(
-                        result.get("messages", [])
-                    )
-
-                    if verified is None:
-                        raise TimeoutError(
-                            "Revenue agent exceeded the document time budget"
-                        )
-
-            return result
+                deadline += time.time() - t0
+                inp = Command(resume={"decisions": decisions})
 
         except Exception as exc:
-            print(
-                f"[!] Agent step failed ({type(exc).__name__}): "
-                f"{str(exc)[:200]}",
-                flush=True
-            )
+            print(f"[!] Agent step failed ({type(exc).__name__}): {str(exc)[:200]}", flush=True)
             raise
+
+        return final or {"messages": []}
 
     # ---------- main ----------
 

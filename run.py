@@ -17,6 +17,8 @@ def main():
         default="TCS_FY26.pdf",
     )
 
+    parser.add_argument("--hitl", action="store_true")
+
     args = parser.parse_args()
 
     print("=" * 60)
@@ -25,7 +27,7 @@ def main():
     print(f"Document: {args.document}")
 
     try:
-        agent = DeepRevenueAgent()
+        agent = DeepRevenueAgent(hitl=args.hitl)
         result = agent.extract_revenue(args.document)
 
         print("\n" + "=" * 60)
