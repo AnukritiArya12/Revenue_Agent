@@ -11,6 +11,7 @@ from deepagents.backends.utils import create_file_data
 from deepagents.middleware.filesystem import FilesystemMiddleware
 from langchain_core.messages import ToolMessage
 from langchain_ollama import ChatOllama
+from langgraph.checkpoint.memory import InMemorySaver
 
 from config import MODEL_NAME, OLLAMA_BASE_URL, MODEL_TEMPERATURE, REPORTS_DIR
 from agent.schemas import RevenueDetails
@@ -99,6 +100,11 @@ class DeepRevenueAgent:
                 FilesystemMiddleware(tools=["read_file", "glob", "grep"])
             ],
             permissions=FILESYSTEM_PERMISSIONS,
+
+            interrupt_on = {
+                "submit_revenue_details" : True
+            },
+            checkpointer =  InMemorySaver(),
         )
 
     # ---------- helpers ----------
