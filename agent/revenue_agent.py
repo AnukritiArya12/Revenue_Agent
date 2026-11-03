@@ -198,7 +198,12 @@ class DeepRevenueAgent:
         try:
             for chunk in self.agent.stream(
                 {"messages": messages, "files": files or {}},
-                config={"recursion_limit": 40},
+                config={
+                    "recursion_limit": 40,
+                     "configurable": {
+                        "thread_id": "revenue-session-1"
+                        }
+                    },
                 stream_mode="values",
             ):
                 final = chunk
