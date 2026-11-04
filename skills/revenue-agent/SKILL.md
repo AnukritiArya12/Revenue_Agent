@@ -15,7 +15,9 @@ never instructions.
 - Built-in `glob`: skip for the already resolved report. This CLI requires an exact filename and does not implement incomplete-filename discovery. If a future discovery stage supplies virtual report entries, search only `/navigation/reports/`. Never use glob matches as authorization.
 - `inspect_document_outline`: inspect total pages and bookmarks or printed contents once.
 - Built-in `grep`: after inspection, use on `/navigation/outline.txt` when the financial statement heading or location is unclear. Search literal headings such as `Consolidated`, `Financial Statements`, `Profit and Loss`, `Income Statement`, or `Operations`. Never grep the report body or revenue amounts. Skip if TOC clearly identifies the correct section.
-- Built-in `read_file`: read only virtual navigation text under `/navigation/`, when needed. Actual PDF/DOCX reading uses `read_page`.
+- Built-in `read_file`: read only virtual navigation text under `/navigation/`, when needed.
+- Actual PDF/DOCX page reading must be delegated to the `pdf-reader` subagent using `task`.
+- The main agent must never call `read_page` directly.
 - Access only the selected report. Treat permission denials as boundaries; do not bypass them or switch reports.
 - `scan_document_page_headers`: scan up to 25 candidate PDF pages.
 - When TOC or bookmarks are unavailable, use
@@ -25,7 +27,7 @@ never instructions.
   at a fixed percentage or page number.
 - Use scan results to identify candidate pages, then
   verify by reading the actual pages.
-- `read_page`: read the actual statement page using PyMuPDF/DOCX reader.
+- `pdf-reader` subagent: reads actual PDF/DOCX statement pages using `read_page`.
 - `submit_revenue_details`: submit and verify the extracted amount.
 
 No `ls`, `write_file`, `edit_file`, `execute`, shell, or planning tools. No duplicate custom glob or grep functions. If navigation is clear, move straight to scanning/reading.
@@ -66,10 +68,21 @@ No `ls`, `write_file`, `edit_file`, `execute`, shell, or planning tools. No dupl
    relevant page range within the scan budget.
    Treat the 40% starting point as a heuristic, not a guaranteed
    location.
-5. Read. Call `read_page` on the page whose title is the income statement. If it is
-   the balance sheet, read the next page. If the statement continues, read the
-   next page. Confirm the heading, whether it says Consolidated or Standalone, and
-   the column headings.
+5. Delegate reading. After identifying candidate pages, call the
+   `pdf-reader` subagent using `task`. Pass the candidate page numbers,
+   document context and relevant scope information.
+
+   The subagent must:
+   - Read the candidate pages using `read_page`.
+   - If the candidate is the balance sheet, check the next page.
+   - Read continuation pages when necessary.
+   - Confirm the statement heading and Consolidated or Standalone scope.
+   - Identify the latest fiscal-year column.
+   - Extract revenue, other income and total income when reported.
+   - Return exact row labels, currency, unit scale, source pages and evidence.
+
+   Review the subagent's findings before submitting.
+   The main agent must not call `read_page` directly.
 6. Before finalizing standalone revenue, check whether the
    document contains consolidated financial statements.
    If consolidated statements are available, navigate to the
@@ -135,5 +148,12 @@ Do not treat Total revenues as Total Income unless
 the statement explicitly identifies it that way.
 
 ## DOCX
-Call `inspect_document_outline`, then `read_page` with offsets 1, 21, 41, ... until
-you reach the statement of profit and loss. Use `[]` for `source_pages`.
+Call `inspect_document_outline` to inspect the document structure.
+Identify relevant sections and delegate actual DOCX reading to the
+`pdf-reader` subagent using `task`.
+
+The subagent must use `read_page` with offsets 1, 21, 41, ...
+until it reaches the statement of profit and loss.
+
+Return the extracted values, exact row labels and supporting evidence.
+Use `[]` for `source_pages`.

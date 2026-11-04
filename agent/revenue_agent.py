@@ -17,7 +17,10 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from config import MODEL_NAME, OLLAMA_BASE_URL, MODEL_TEMPERATURE, REPORTS_DIR
 from agent.schemas import RevenueDetails
-from agent.prompts import DEEP_AGENT_SYSTEM_PROMPT
+from agent.prompts import (
+    DEEP_AGENT_SYSTEM_PROMPT,
+    PDF_READER_SUBAGENT_PROMPT,
+)
 from agent.tools import (
     inspect_document_outline,
     scan_document_page_headers,
@@ -95,8 +98,19 @@ class DeepRevenueAgent:
             tools=[
                 inspect_document_outline,
                 scan_document_page_headers,
-                read_page,
                 submit_revenue_details,
+            ],
+            subagents=[
+                { 
+                    "name": "pdf-reader",
+                    "description": (
+                        "Reads financial statement pages and extracts "
+                        "revenue, other income, total income and evidence."
+                    ),
+                    "model": llm,
+                    "tools": [read_page],
+                    "system_prompt": PDF_READER_SUBAGENT_PROMPT,
+                }
             ],
             system_prompt=DEEP_AGENT_SYSTEM_PROMPT,
             backend=StateBackend(),
