@@ -23,6 +23,78 @@ def _resolve_document_path(filename: str) -> Path:
     return candidate
 
 
+def _detect_synthetic_outline(doc: pymupdf.Document) -> List[Dict[str, Any]]:
+    """
+    For PDFs without digital bookmarks, scan page titles and structural signatures
+    across the document to detect major financial statement sections.
+    """
+    total = len(doc)
+    detected = []
+    seen = set()
+
+    for pno in range(total):
+        txt = doc[pno].get_text("text")
+        lines = [l.strip() for l in txt.splitlines() if l.strip()][:6]
+        if not lines:
+            continue
+
+        header_text = " ".join(lines).lower()
+        is_cons = any(c in header_text for c in ["consolidated", "group"])
+
+        # 1. Primary Statement Heading Match
+        if any(term in header_text for term in [
+            "statement of profit and loss", "statements of operations",
+            "statement of operations", "income statement", "statements of income",
+            "statement of earnings"
+        ]):
+            key = "cons_pnl" if is_cons else "pnl"
+            if key not in seen:
+                seen.add(key)
+                title = "Consolidated Statement of Profit and Loss" if is_cons else "Statement of Profit and Loss"
+                detected.append({"level": 1, "title": title, "page": pno + 1})
+            continue
+
+        # 2. Section Headers
+        if any(term in header_text for term in ["consolidated financial statements", "consolidated balance sheet"]):
+            if "cons_sec" not in seen and not any(k in header_text[:50] for k in ["notes", "refer", "annexure"]):
+                seen.add("cons_sec")
+                detected.append({"level": 1, "title": "Consolidated Financial Statements", "page": pno + 1})
+            continue
+
+        if any(term in header_text for term in ["standalone financial statements", "standalone balance sheet"]):
+            if "stand_sec" not in seen and not any(k in header_text[:50] for k in ["notes", "refer", "annexure"]):
+                seen.add("stand_sec")
+                detected.append({"level": 1, "title": "Standalone Financial Statements", "page": pno + 1})
+            continue
+
+        # 3. Structural Financial Signature Fallback (at least 3 key financial lines together)
+        lower_full = txt.lower()
+        has_rev = any(w in lower_full for w in [
+            "revenue from operation", "revenue from operations", "net sales",
+            "total revenue", "total net sales", "total revenues", "revenues"
+        ])
+        has_prof = any(w in lower_full for w in [
+            "profit before tax", "profit for the year", "operating profit",
+            "operating income", "net income", "income before income tax"
+        ])
+        has_tax = any(w in lower_full for w in [
+            "tax expense", "provision for income taxes", "income taxes",
+            "income tax expense", "taxation"
+        ])
+        has_eps = any(w in lower_full for w in ["earnings per share", "eps", "per share"])
+
+        score = sum([has_rev, has_prof, has_tax, has_eps])
+        if score >= 3:
+            cons_sig = any(w in lower_full[:400] for w in ["consolidated", "group"])
+            key = "sig_cons" if cons_sig else "sig_pnl"
+            if key not in seen:
+                seen.add(key)
+                title = "Consolidated Financial Statements (P&L / Operations)" if cons_sig else "Financial Statements (P&L / Operations)"
+                detected.append({"level": 1, "title": title, "page": pno + 1})
+
+    return sorted(detected, key=lambda x: x["page"])
+
+
 def get_document_outline(filename: str) -> Dict[str, Any]:
     """
     Extracts total pages and bookmarks / Table of Contents (TOC).
@@ -53,15 +125,20 @@ def get_document_outline(filename: str) -> Dict[str, Any]:
                         "page": page,
                     })
 
-        # Handle missing TOC: provide preview of initial pages where printed index lives
+        # If digital bookmarks are missing or sparse, generate synthetic outline
+        if len(outline_items) < 3:
+            synthetic = _detect_synthetic_outline(doc)
+            if synthetic:
+                outline_items = synthetic
+
+        # Provide preview of initial pages if still no outline
         printed_toc_preview = ""
         if len(outline_items) < 3:
             previews = []
-            preview_limit = min(10, total_pages)
+            preview_limit = min(15, total_pages)
             for i in range(preview_limit):
                 txt = doc[i].get_text("text").strip()
                 if txt:
-                    # Capture first 500 chars of early index pages
                     previews.append(f"--- Page {i+1} ---\n{txt[:1500]}")
             printed_toc_preview = "\n\n".join(previews)
 
@@ -69,7 +146,7 @@ def get_document_outline(filename: str) -> Dict[str, Any]:
             "filename": doc_path.name,
             "total_pages": total_pages,
             "outline": outline_items,
-            "has_bookmarks": len(outline_items) >= 3,
+            "has_bookmarks": len(outline_items) >= 1,
             "printed_toc_preview": printed_toc_preview,
         }
 

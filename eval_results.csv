@@ -4,7 +4,7 @@ GAIL,GAIL _FY24.pdf,142291.42,142291.42,True,True,True,True,
 Abbott,Abbott_FY26.pdf,6929.05,6929.05,True,False,True,True,
 Accenture,Accenture_FY25.pdf,69672977.0,69672977.0,True,True,True,True,
 Amazon,Amazon_FY25.pdf,716924.0,716924.0,True,True,True,True,
-Adidas,Adidas_FY25.pdf,24811.0,24811.0,True,True,True,True,
+Adidas,Adidas_FY25.pdf,24811.0,None,False,False,False,False,GraphRecursionError: Recursion limit of 50 reached without hitting a stop condition. You can increase the limit by setting the `recursion_lim
 Alok,Alok_FY26.pdf,3714.79,3714.79,True,False,True,True,
 American Express,American Express_FY25.pdf,72229.0,72229.0,True,True,True,True,
 Apple,Apple_FY26.pdf,416161.0,416161.0,True,True,True,True,
